@@ -11,6 +11,7 @@ const exec = require('child_process').exec;
 const validUrl = require('valid-url');
 const promptSync = require('readline-sync').question;
 const portscanner = require('portscanner');
+const spawn = require('child_process').spawn;
 
 var config = {};
 var config_file = '';
@@ -31,6 +32,24 @@ if (fs.existsSync(config_file)) {
     config = require(config_file);
 }
 
+if(config.servers) {
+    //Clean deleted servers
+    for(var serv in config.servers) {
+        if (!fs.existsSync(target_dir+'/servers/'+serv)) { 
+            delete config.servers[serv];
+        }
+    }
+}
+
+if(config['third-part-servers']) {
+    //Clean deleted third-part servers
+    for(var i=0; i<config['third-part-servers'].length; i++) {
+        if (!fs.existsSync(target_dir+'/servers/third-part-servers/'+config['third-part-servers'][i])) { 
+            config['third-part-servers'].splice(i, 1);
+        }
+    }
+}
+
 if (!config.type || config.type === 'cluster') { 
     isCluster = true;
     isServer = false;
@@ -41,10 +60,11 @@ if (!config.type || config.type === 'cluster') {
         if(config && cluster_name) config.name = cluster_name;
     }
 
-    jsonfile.writeFile(config_file, {
-        name : cluster_name,
-        type : 'cluster'
-    }, {spaces: 2}, function(err) {
+    config.name = cluster_name;
+    config.type = 'cluster';
+
+    jsonfile.writeFile(config_file, config, {spaces: 2}, function(err) {
+        if (err) throw(err);
     });
 
 } else if (config.type === 'server') { 
@@ -59,7 +79,11 @@ if (!config.type || config.type === 'cluster') {
 
 if(isCluster) {
     choice_menu = choice_menu.concat([
-        "Add a server (node)"
+        "Add a server (node)",
+        "Start the cluster",
+        "Stop the cluster",
+        "Start a server",
+        "Stop a server"
         ]);
 } else if(isServer) {
     choice_menu = choice_menu.concat([
@@ -69,6 +93,19 @@ if(isCluster) {
         "Add a local route",
         "Add a remote route"
     ]);
+}
+
+var run = {};
+var run_folder = target_dir+'/system';
+var run_file = run_folder+'/run.json';
+
+if (!fs.existsSync(run_folder)) {
+    mkdirp(run_folder, function(err) { 
+        if (err) throw err;
+    });
+}
+if (fs.existsSync(run_file)) {
+    run = require(run_file);
 }
 
 function get_available_port(host,range,cbk) {
@@ -123,6 +160,62 @@ function main() {
     }]).then(function (answers) {
         switch(answers.options) {
 
+        //"Start the cluster",
+        //"Stop the cluster",
+        //"Start a server",
+        //"Stop a server"
+        
+            case 'Start the cluster':
+
+                for(var serv in config.servers) {
+                    if (fs.existsSync(target_dir+'/servers/'+serv)) { 
+                        if(fs.existsSync(target_dir+'/servers/'+serv+'/app.js')) {
+
+                            const proc = spawn('node', [target_dir+'/servers/'+serv+'/app.js',false], {
+                                detached: true,
+                                stdio: ['ignore',process.stdout,'ignore']
+                            });
+
+                            if(!run[config.name]) {
+                                run[config.name] = [];
+                            }
+
+                            run[config.name].push(proc.pid);
+
+                        } else {
+                            console.log('Server seems broken, no app.js found'.yellow,'Abort'.red);
+                        }
+
+                    }
+                }
+
+                jsonfile.writeFile(run_file, run, {spaces: 2}, function(err) {
+                    if(err) throw(err);
+                    setTimeout(function() {
+                        main();
+                    },800);
+                });
+
+                break;
+
+            case 'Stop the cluster':
+
+
+                while(run[config.name].length) {
+                    exec('kill '+run[config.name].shift(), (err, stdout, stderr) => {
+                        //if(err) throw(err);
+                    });
+                }
+
+                jsonfile.writeFile(run_file, run, {spaces: 2}, function(err) {
+                    if(err) throw(err);
+                    setTimeout(function() {
+                        main();
+                    },800);
+                });
+
+                break;
+
             case 'Add a server (node)':
 
                 var _config = {};
@@ -141,13 +234,6 @@ function main() {
 
                 if(!config.servers) {
                     config.servers = {};
-                }
-
-                //Clean deleted servers
-                for(var serv in config.servers) {
-                    if (!fs.existsSync(target_dir+'/servers/'+serv)) { 
-                        delete config.servers[serv];
-                    }
                 }
 
                 var range_container = [];
@@ -185,7 +271,12 @@ function main() {
                         name: 'name',
                         message: 'server name?*',
                         validate: function(str){
-                            return !!str;
+
+                            if (fs.existsSync(target_dir+'/servers/'+str)) {
+                                return 'This name is already taken';
+                            } else {
+                                return !!str;
+                            }
                         }
                     },
                     {
@@ -406,13 +497,6 @@ function main() {
                     }
 
                     config['third-part-servers'].push(resp.name+'.js');
-
-                    //Clean deleted servers
-                    for(var i=0; i<config['third-part-servers'].length; i++) {
-                        if (!fs.existsSync(target_dir+'/servers/third-part-servers/'+config['third-part-servers'][i])) { 
-                            config['third-part-servers'].splice(i, 1);
-                        }
-                    }
 
                     jsonfile.writeFile(config_file, config, {spaces: 2}, function(err) {
                         if(err) console.error(err)
@@ -920,12 +1004,14 @@ function main() {
 
             case 'Quit':
                 console.log('bye');
-                break;
+                process.exit(1);
+                return;
 
             default:
                 break;
         }
     });
+
 }
 
 main();
