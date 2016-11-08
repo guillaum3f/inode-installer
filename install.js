@@ -12,7 +12,7 @@ const validUrl = require('valid-url');
 const promptSync = require('readline-sync').question;
 const portscanner = require('portscanner');
 
-var config = false;
+var config = {};
 var config_file = '';
 var range_port = [8000,10000];
 var isCluster = null;
@@ -31,14 +31,14 @@ if (fs.existsSync(config_file)) {
     config = require(config_file);
 }
 
-if (!config || (config && config.type === 'cluster')) { 
+if (!config.type || config.type === 'cluster') { 
     isCluster = true;
     isServer = false;
     target_dir = '.';//Obsolete?
-    cluster_name = config.name;
+    if(config.name) cluster_name = config.name;
     while (!cluster_name){
         cluster_name = promptSync('?'.green+' Cluster detected. Name it:* '.bold.white);
-        if(cluster_name) config.name = cluster_name;
+        if(config && cluster_name) config.name = cluster_name;
     }
 
     jsonfile.writeFile(config_file, {
@@ -47,12 +47,14 @@ if (!config || (config && config.type === 'cluster')) {
     }, {spaces: 2}, function(err) {
     });
 
-} else if (config && config.type === 'server') { 
+} else if (config.type === 'server') { 
     isServer = true;
     isCluster = false;
 } else {
     isCluster = false;
     isServer = false;
+    console.log('Type '+config.type+' is not yet supported.'.yellow,'Abort'.red);
+    return;
 }
 
 if(isCluster) {
@@ -300,31 +302,40 @@ function main() {
                                         _config['static-content-enabled'] = resp.static;
 
                                         if(_config['static-content-enabled'] === 'true') {
-                                            _config['static-root'] = path.normalize(target_dir+'/servers/'+resp.name+'/static');
+                                            //_config['static-root'] = path.normalize(target_dir+'/servers/'+resp.name+'/static');
+                                            _config['static-root'] = 'static';
                                             _config['static-entry-point'] = 'index.html';
                                         } 
                                         if(resp['static-app-url']) {
                                             _config['static-origin'] = resp['static-app-url'];
-                                            exec('git clone '+_config["static-origin"]+' '+_config["static-root"], (error, stdout, stderr) => {
-                                                if(error) throw(error);
-                                                var fflag=0;
-                                                var finder = require('findit')(_config['static-root']);
-                                                finder.on('file', function (file) {
-                                                    if(path.basename(file) === _config['static-entry-point'] && fflag === 0) {
-                                                        fflag=1;
-                                                        _config['static-root'] = path.dirname(file);
-                                                    } else if (path.basename(file) === 'bower.json') {
-                                                        exec('cd '+path.dirname(file)+' && bower install', (error, stdout, stderr) => {
-                                                            if(error) throw error;
+                                            var static_abs_path = path.join(target_dir+'/servers/'+resp.name+'/static');
+                                            //exec('git clone '+_config["static-origin"]+' '+_config["static-root"], (error, stdout, stderr) => {
+                                            exec('git clone '+_config["static-origin"]+' '+static_abs_path, (error, stdout, stderr) => {
+                                                        if(error) throw(error);
+                                                        var fflag=0;
+                                                        var finder = require('findit')(static_abs_path);
+                                                        finder.on('file', function (file) {
+                                                            if(path.basename(file) === _config['static-entry-point'] && fflag === 0) {
+                                                                fflag=1;
+                                                                //_config['static-root'] = path.dirname(file);
+                                                                var pattern = new RegExp('.*'+resp.name+'\/?')
+                                                                _config['static-root'] = path.dirname(file.replace(pattern,''));
+                                                            } else if (path.basename(file) === 'bower.json') {
+                                                                exec('cd '+path.dirname(file)+' && bower install', (error, stdout, stderr) => {
+                                                                    if(error) throw error;
+                                                                });
+                                                            } else if (path.basename(file) === 'package.json') {
+                                                                exec('cd '+path.dirname(file)+' && npm install', (error, stdout, stderr) => {
+                                                                    if(error) throw error;
+                                                                });
+                                                            }
                                                         });
-                                                    }
-                                                });
-                                                finder.on('error', function (error) {
-                                                    if(error) throw(error);
-                                                });
-                                                finder.on('end', function () {
-                                                    finalize_process();
-                                                });
+                                                        finder.on('error', function (error) {
+                                                            if(error) throw(error);
+                                                        });
+                                                        finder.on('end', function () {
+                                                            finalize_process();
+                                                        });
                                             });
                                         } else {
                                             finalize_process();
