@@ -355,7 +355,6 @@ function main() {
                     target_dir = '.';
                 }
 
-
                 var third_part_server = [
                 {
                     type: 'input',
@@ -418,6 +417,13 @@ function main() {
                     }
 
                     config['third-part-servers'].push(resp.name+'.js');
+
+                    //Clean deleted servers
+                    for(var i=0; i<config['third-part-servers'].length; i++) {
+                        if (!fs.existsSync(target_dir+'/servers/third-part-servers/'+config['third-part-servers'][i])) { 
+                            config['third-part-servers'].splice(i, 1);
+                        }
+                    }
 
                     jsonfile.writeFile(config_file, config, {spaces: 2}, function(err) {
                         if(err) console.error(err)
