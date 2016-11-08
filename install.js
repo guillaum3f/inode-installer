@@ -10,112 +10,18 @@ var colors = require('colors');
 const exec = require('child_process').exec;
 const validUrl = require('valid-url');
 const promptSync = require('readline-sync').question;
+const portscanner = require('portscanner');
 
 var finish_process = '';
+var range_port = [8000,10000];
+var next_port = '';
 
-var server = [
-{
-    type: 'input',
-    name: 'name',
-    message: 'server name?*',
-    validate: function(str){
-        return !!str;
-    }
-},
-{
-    type: 'input',
-    name: 'description',
-    message: 'description?*',
-    validate: function(str){
-        return !!str;
-    }
-},
-{
-    type: 'input',
-    name: 'licence',
-    message: 'Licence?',
-    default: 'none',
-    validate: function(str){
-        return !!str;
-    }
-},
-{
-    type: 'input',
-    name: 'owner',
-    message: 'Owner?',
-    default: 'none',
-    validate: function(str){
-        return !!str;
-    }
-},
-{
-    type: 'input',
-    name: 'host',
-    message: 'Host and Port Number?* [i.e localhost:8763] ',
-    validate: function(str){
-        if(str.split(':').length === 2) {
-            return true;
-        }
-    }
-},
-{
-    type: 'input',
-    name: 'static',
-    message: 'Enable static content?* [true|false]',
-    validate: function(str){
-        if (str === 'true' || str === 'false') {
-            return true;
-        }
-    }
+function get_available_port(cbk) {
+    portscanner.findAPortNotInUse(range_port[0], range_port[1], '127.0.0.1', function(error, port) {
+        next_port = port;
+        cbk();
+    })
 }
-];
-
-var third_part_server = [
-{
-    type: 'input',
-    name: 'name',
-    message: 'Server name?*',
-    validate: function(str){
-        return !!str;
-    }
-},
-{
-    type: 'input',
-    name: 'description',
-    message: 'Description?*',
-    validate: function(str){
-        return !!str;
-    }
-},
-{
-    type: 'input',
-    name: 'owner',
-    message: 'Owner?*',
-    validate: function(str){
-        return !!str;
-    }
-},
-{
-    type: 'input',
-    name: 'licence',
-    message: 'Licence?',
-    default: 'none',
-    validate: function(str){
-        return !!str;
-    }
-},
-{
-    type: 'input',
-    name: 'editor',
-    message: 'Your favorite code editor?',
-    default: 'vim',
-    validate: function(str){
-        return !!str;
-    }
-}
-];
-
-
 
 var middleware = [
 {
@@ -192,7 +98,7 @@ function overWrite(item, callback) {
     });
 }
 
-var target_dir = process.argv[2] || __dirname+'/../..';
+var target_dir = __dirname+'/../..';
 var config_file = target_dir+'/config.json';
 
 function main() {
@@ -213,105 +119,235 @@ function main() {
         switch(answers.options) {
 
             case 'Add a server (node)':
+                get_available_port(function() {
 
-                inquirer.prompt(server).then(function(resp) {
-
-                    if(resp.static === 'true') {
-                        while (!resp['static-app-url']){
-                            resp['static-app-url'] = promptSync('?'.green+' Static app Github url: '.bold.white);
+                    var server = [
+                    {
+                        type: 'confirm',
+                        name: 'location',
+                        message: 'This is a new cluster?*',
+                        validate: function(str){
+                            return !!str;
                         }
-                        if (!validUrl.isUri(resp['static-app-url'])){
-                            resp['static-app-url'] = null;
+                    },
+                    {
+                        type: 'input',
+                        name: 'name',
+                        message: 'server name?*',
+                        validate: function(str){
+                            return !!str;
                         }
-                    }
-
-                    finish_process = function() {
-                        exec('git clone https://github.com/guillaum3f/inode24.git '+target_dir+'/servers/'+resp.name,
-                                (error, stdout, stderr) => {
-                                    if(error) console.log(error);
-                                    _config.name = resp.name;
-                                    _config.owner = resp.owner;
-                                    _config.description = resp.description;
-                                    _config.licence = resp.licence || 'none';
-                                    _config.port = resp.host.split(':')[1];
-                                    _config['static-content-enabled'] = resp.static;
-
-                                    if(_config['static-content-enabled'] === 'true') {
-                                        _config['static-root'] = path.normalize(target_dir+'/servers/'+resp.name+'/static');
-                                        _config['static-entry-point'] = 'index.html';
-                                    } 
-                                    if(resp['static-app-url']) {
-                                        _config['static-origin'] = resp['static-app-url'];
-                                        exec('git clone '+_config["static-origin"]+' '+_config["static-root"], (error, stdout, stderr) => {
-                                                    if(error) throw(error);
-                                                    var fflag=0;
-                                                    var finder = require('findit')(_config['static-root']);
-                                                    finder.on('file', function (file) {
-                                                        if(path.basename(file) === _config['static-entry-point'] && fflag === 0) {
-                                                            fflag=1;
-                                                            _config['static-root'] = path.dirname(file);
-                                                        } else if (path.basename(file) === 'bower.json') {
-                                                            exec('cd '+path.dirname(file)+' && bower install', (error, stdout, stderr) => {
-                                                                if(error) throw error;
-                                                            });
-                                                        }
-                                                    });
-                                                    finder.on('error', function (error) {
-                                                        if(error) throw(error);
-                                                    });
-                                                    finder.on('end', function () {
-                                                        finalize_process();
-                                                    });
-                                                });
-                                    } else {
-                                        finalize_process();
+                    },
+                    {
+                        type: 'input',
+                        name: 'description',
+                        message: 'description?*',
+                        validate: function(str){
+                            return !!str;
+                        }
+                    },
+                        {
+                            type: 'input',
+                            name: 'licence',
+                            message: 'Licence?',
+                            default: 'none',
+                                     validate: function(str){
+                                         return !!str;
+                                     }
+                        },
+                        {
+                            type: 'input',
+                            name: 'owner',
+                            message: 'Owner?',
+                            default: 'none',
+                                     validate: function(str){
+                                         return !!str;
+                                     }
+                        },
+                            {
+                                type: 'input',
+                                name: 'host',
+                                message: 'Host and Port Number? [localhost:'+next_port+'] ',
+                                validate: function(str){
+                                    if(!str) {
+                                        return true;
+                                    } else if(str.split(':').length === 2) {
+                                        return true;
                                     }
+                                }
+                            },
+                            {
+                                type: 'input',
+                                name: 'static',
+                                message: 'Enable static content?* [true|false]',
+                                validate: function(str){
+                                    if (str === 'true' || str === 'false') {
+                                        return true;
+                                    }
+                                }
+                            }
+                    ];
 
-                                });
-                    }
+                    inquirer.prompt(server).then(function(resp) {
 
-                    finalize_process = function() {
-                        jsonfile.writeFile(target_dir+'/servers/'+resp.name+'/config.json', _config, {spaces: 2}, function(err) {
-                            if(err) console.error(err);
-                            exec('cd '+target_dir+'/servers/'+resp.name+' && npm install', (err, stdout, stderr) => {
+                        if(resp.location === true) target_dir = '.';
+
+                        if(!resp.host) {
+                            resp.host = 'localhost:'+next_port;
+                        }
+
+                        if(resp.static === 'true') {
+                            while (!resp['static-app-url']){
+                                resp['static-app-url'] = promptSync('?'.green+' Static app Github url: '.bold.white);
+                            }
+                            if (!validUrl.isUri(resp['static-app-url'])){
+                                resp['static-app-url'] = null;
+                            }
+                        }
+
+                        finish_process = function() {
+                            exec('git clone https://github.com/guillaum3f/inode24.git '+target_dir+'/servers/'+resp.name,
+                                    (error, stdout, stderr) => {
+                                        if(error) console.log(error);
+                                        _config.name = resp.name;
+                                        _config.owner = resp.owner;
+                                        _config.description = resp.description;
+                                        _config.licence = resp.licence || 'none';
+                                        _config.port = resp.host.split(':')[1];
+                                        _config['static-content-enabled'] = resp.static;
+
+                                        if(_config['static-content-enabled'] === 'true') {
+                                            _config['static-root'] = path.normalize(target_dir+'/servers/'+resp.name+'/static');
+                                            _config['static-entry-point'] = 'index.html';
+                                        } 
+                                        if(resp['static-app-url']) {
+                                            _config['static-origin'] = resp['static-app-url'];
+                                            exec('git clone '+_config["static-origin"]+' '+_config["static-root"], (error, stdout, stderr) => {
+                                                if(error) throw(error);
+                                                var fflag=0;
+                                                var finder = require('findit')(_config['static-root']);
+                                                finder.on('file', function (file) {
+                                                    if(path.basename(file) === _config['static-entry-point'] && fflag === 0) {
+                                                        fflag=1;
+                                                        _config['static-root'] = path.dirname(file);
+                                                    } else if (path.basename(file) === 'bower.json') {
+                                                        exec('cd '+path.dirname(file)+' && bower install', (error, stdout, stderr) => {
+                                                            if(error) throw error;
+                                                        });
+                                                    }
+                                                });
+                                                finder.on('error', function (error) {
+                                                    if(error) throw(error);
+                                                });
+                                                finder.on('end', function () {
+                                                    finalize_process();
+                                                });
+                                            });
+                                        } else {
+                                            finalize_process();
+                                        }
+
+                                    });
+                        }
+
+                        finalize_process = function() {
+                            jsonfile.writeFile(target_dir+'/servers/'+resp.name+'/config.json', _config, {spaces: 2}, function(err) {
                                 if(err) console.error(err);
-                                exec('git clone https://github.com/guillaum3f/inode-installer.git '+target_dir+'/servers/'+resp.name+'/system/admin',
-                                        (error, stdout, stderr) => {
-                                            if(err) console.error(err);
-                                            console.log(colors.green('Inode '+resp.name+' has been installed!'));
-                                        });
+                                exec('cd '+target_dir+'/servers/'+resp.name+' && npm install', (err, stdout, stderr) => {
+                                    if(err) console.error(err);
+                                    exec('git clone https://github.com/guillaum3f/inode-installer.git '+target_dir+'/servers/'+resp.name+'/system/admin',
+                                            (error, stdout, stderr) => {
+                                                if(err) console.error(err);
+                                                console.log(colors.green('Inode '+resp.name+' has been installed!'));
+                                            });
+                                });
                             });
-                        });
-                    }
+                        }
 
-                    var config = {};
-                    var _config = {};
+                        var config = {};
+                        var _config = {};
 
-                    if (fs.existsSync(config_file)) { 
-                        config = require(config_file);
-                    } 
+                        if (fs.existsSync(config_file)) { 
+                            config = require(config_file);
+                        } 
 
-                    if(!config.servers) {
-                        config.servers = {};
-                    }
+                        if(!config.servers) {
+                            config.servers = {};
+                        }
 
-                    config.servers[resp.name] = resp.host;
+                        config.servers[resp.name] = resp.host;
 
-                    if (fs.existsSync(config_file)) { 
-                        jsonfile.writeFile(config_file, config, {spaces: 2}, function(err) {
-                            if(err) console.error(err)
-                                finish_process();
-                        });
-                    } else {
-                        finish_process();
-                    }
+                        if (fs.existsSync(config_file)) { 
+                            jsonfile.writeFile(config_file, config, {spaces: 2}, function(err) {
+                                if(err) console.error(err)
+                                    finish_process();
+                            });
+                        } else {
+                            finish_process();
+                        }
 
 
-                });
+                    });
+                }); 
 
                 break;
 
             case 'Add a third-part-server':
+
+                var third_part_server = [
+                {
+                    type: 'confirm',
+                    name: 'location',
+                    message: 'This is a new cluster?*',
+                    validate: function(str){
+                        return !!str;
+                    }
+                },
+                {
+                    type: 'input',
+                    name: 'name',
+                    message: 'Server name?*',
+                    validate: function(str){
+                        return !!str;
+                    }
+                },
+                {
+                    type: 'input',
+                    name: 'description',
+                    message: 'Description?*',
+                    validate: function(str){
+                        return !!str;
+                    }
+                },
+                    {
+                        type: 'input',
+                        name: 'owner',
+                        message: 'Owner?*',
+                        validate: function(str){
+                            return !!str;
+                        }
+                    },
+                    {
+                        type: 'input',
+                        name: 'licence',
+                        message: 'Licence?',
+                        default: 'none',
+                                 validate: function(str){
+                                     return !!str;
+                                 }
+                    },
+                        {
+                            type: 'input',
+                            name: 'editor',
+                            message: 'Your favorite code editor?',
+                            default: 'vim',
+                                     validate: function(str){
+                                         return !!str;
+                                     }
+                        }
+                ];
+
+                if(resp.location === true) target_dir = '.';
 
                 mkdirp(target_dir+'/servers/third-part-servers', function(err) { 
                     if (err) throw err;
