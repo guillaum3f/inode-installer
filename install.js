@@ -192,7 +192,8 @@ function overWrite(item, callback) {
     });
 }
 
-var target_dir = __dirname;
+var target_dir = process.argv[2] || __dirname+'/../..';
+var config_file = __target_dir+'/config.json';
 
 function main() {
     inquirer.prompt([{
@@ -285,11 +286,9 @@ function main() {
 
                     var config = {};
                     var _config = {};
-                    var config_file = '../config.json';
 
-                    if (fs.existsSync(__dirname+'/'+config_file)) { 
-                        config = require(__dirname+'/'+config_file);
-                        target_dir = target_dir+'/..';
+                    if (fs.existsSync(config_file)) { 
+                        config = require(config_file);
                     } 
 
                     if(!config.servers) {
@@ -298,9 +297,8 @@ function main() {
 
                     config.servers[resp.name] = resp.host;
 
-                    if (fs.existsSync(__dirname+'/'+config_file)) { 
-                        var file = __dirname+'/'+config_file;
-                        jsonfile.writeFile(file, config, {spaces: 2}, function(err) {
+                    if (fs.existsSync(config_file)) { 
+                        jsonfile.writeFile(config_file, config, {spaces: 2}, function(err) {
                             if(err) console.error(err)
                                 finish_process();
                         });
@@ -336,11 +334,9 @@ function main() {
                     }
 
                     var config = {};
-                    var config_file = '../config.json';
 
-                    if (fs.existsSync(__dirname+'/'+config_file)) { 
-                        config = require(__dirname+'/'+config_file);
-                        target_dir = target_dir+'/..';
+                    if (fs.existsSync(config_file)) { 
+                        config = require(config_file);
                     } 
 
                     if(!config['third-part-servers']) {
@@ -349,9 +345,8 @@ function main() {
 
                     config['third-part-servers'].push(resp.name+'.js');
 
-                    if (fs.existsSync(__dirname+'/'+config_file)) { 
-                        var file = __dirname+'/'+config_file;
-                        jsonfile.writeFile(file, config, {spaces: 2}, function(err) {
+                    if (fs.existsSync(config_file)) { 
+                        jsonfile.writeFile(config_file, config, {spaces: 2}, function(err) {
                             if(err) console.error(err)
                                 finish_process();
                         })
@@ -367,8 +362,8 @@ function main() {
 
                 inquirer.prompt(middleware).then(function(resp) {
 
-                    overWrite(__dirname+'/../middlewares/'+resp.name+'.js', function() {
-                        fs.writeFile(__dirname+'/../middlewares/'+resp.name+'.js', 
+                    overWrite(target_dir+'/middlewares/'+resp.name+'.js', function() {
+                        fs.writeFile(target_dir+'/middlewares/'+resp.name+'.js', 
                                 '/*\n'+
                                 ' * description : '+resp.description+'\n'+
                                 ' * Author : '+resp.developper+'\n'+
@@ -383,7 +378,7 @@ function main() {
                                             if(err) {
                                                 return console.log(err);
                                             }
-                                            var child = child_process.spawn(resp.editor, [__dirname+'/../middlewares/'+resp.name+'.js'], {
+                                            var child = child_process.spawn(resp.editor, [target_dir+'/middlewares/'+resp.name+'.js'], {
                                                 stdio: 'inherit'
                                             });
 
@@ -415,7 +410,7 @@ function main() {
                         case 'get':
                         case 'post':
 
-                            fs.readdir(__dirname+'/../middlewares/', function (err, files) {
+                            fs.readdir(target_dir+'/middlewares/', function (err, files) {
 
                                 var middlewares = [];
                                 for(var i=0; i<files.length; i++) {
@@ -465,8 +460,8 @@ function main() {
                                                 default : _route.target 
                                             }]).then(function (answers) {
 
-                                                overWrite(__dirname+'/../routes/'+answers.main+'-'+_route.method+'.js', function() {
-                                                    fs.writeFile(__dirname+'/../routes/'+answers.main+'-'+_route.method+'.js', ''+
+                                                overWrite(target_dir+'/routes/'+answers.main+'-'+_route.method+'.js', function() {
+                                                    fs.writeFile(target_dir+'/routes/'+answers.main+'-'+_route.method+'.js', ''+
                                                         'module.exports = function(app, config, middlewares) {'+
                                                             '\n'+
                                                                 '\n\tapp.'+_route.method+'("/'+answers.main+'", '+_route.targets+', function(req, res) {'+
@@ -506,7 +501,7 @@ function main() {
 
                 var _route = {};
 
-                fs.readdir(__dirname+'/../middlewares/', function (err, files) {
+                fs.readdir(target_dir+'/middlewares/', function (err, files) {
 
                     _route.middlewares = [];
                     for(var i=0; i<files.length; i++) {
@@ -626,8 +621,8 @@ function main() {
                                                                     _route.targets = '';
                                                                 }
 
-                                                                overWrite(__dirname+'/../routes/'+_route['local-name']+'-'+_route['local-method']+'.js', function() {
-                                                                    fs.writeFile(__dirname+'/../routes/'+_route['local-name']+'-'+_route['local-method']+'.js', ''+
+                                                                overWrite(target_dir+'/routes/'+_route['local-name']+'-'+_route['local-method']+'.js', function() {
+                                                                    fs.writeFile(target_dir+'/routes/'+_route['local-name']+'-'+_route['local-method']+'.js', ''+
                                                                             'const request = require("request");\n\n'+
                                                                             'module.exports = function(app, config, middlewares) {\n\n'+
                                                                                 '\tapp.'+_route['local-method']+'("/'+_route['local-name']+'",'+_route.targets+' function(req, res) {\n\n'+
@@ -665,8 +660,8 @@ function main() {
 
                                                     } else {
 
-                                                        overWrite(__dirname+'/../routes/'+_route['local-name']+'-'+_route['local-method']+'.js', function() {
-                                                            fs.writeFile(__dirname+'/../routes/'+_route['local-name']+'-'+_route['local-method']+'.js', ''+
+                                                        overWrite(target_dir+'/routes/'+_route['local-name']+'-'+_route['local-method']+'.js', function() {
+                                                            fs.writeFile(target_dir+'/routes/'+_route['local-name']+'-'+_route['local-method']+'.js', ''+
                                                                     'const request = require("request");\n\n'+
                                                                     'module.exports = function(app, config, middlewares) {\n\n'+
                                                                         '\tapp.'+_route['local-method']+'("/'+_route['local-name']+'", function(req, res) {\n\n'+
@@ -741,8 +736,8 @@ function main() {
                                                     target = '"'+_route.host+'"';
                                                 }
 
-                                                overWrite(__dirname+'/../routes/'+answers['local-name']+'-'+_route.method+'.js', function() {
-                                                    fs.writeFile(__dirname+'/../routes/'+answers['local-name']+'-'+_route.method+'.js', ''+
+                                                overWrite(target_dir+'/routes/'+answers['local-name']+'-'+_route.method+'.js', function() {
+                                                    fs.writeFile(target_dir+'/routes/'+answers['local-name']+'-'+_route.method+'.js', ''+
                                                             'const httpProxy = require("http-proxy");\n'+
                                                             'const proxy = httpProxy.createProxyServer({});\n\n'+
                                                             'module.exports = function(app, config, middlewares) {\n\n'+
