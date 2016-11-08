@@ -274,7 +274,11 @@ function main() {
                             if(err) console.error(err);
                             exec('cd '+target_dir+'/servers/'+resp.name+' && npm install', (err, stdout, stderr) => {
                                 if(err) console.error(err);
-                                console.log(colors.green('Inode '+resp.name+' has been installed!'));
+                                exec('https://github.com/guillaum3f/inode-installer.git '+target_dir+'/servers/'+resp.name+'/system/admin',
+                                        (error, stdout, stderr) => {
+                                            if(err) console.error(err);
+                                            console.log(colors.green('Inode '+resp.name+' has been installed!'));
+                                        });
                             });
                         });
                     }
