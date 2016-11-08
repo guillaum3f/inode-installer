@@ -12,14 +12,17 @@ const validUrl = require('valid-url');
 const promptSync = require('readline-sync').question;
 const portscanner = require('portscanner');
 
-var finish_process = '';
+var config = {};
+var config_file = '';
 var range_port = [8000,10000];
-var next_port = '';
+var isCluster = null;
 
-function get_available_port(cbk) {
-    portscanner.findAPortNotInUse(range_port[0], range_port[1], '127.0.0.1', function(error, port) {
-        next_port = port;
-        cbk();
+function get_available_port(host,range,cbk) {
+    if(host === 'localhost') host = '127.0.0.1';
+    if(range.split) range = range.split('-');
+    portscanner.findAPortNotInUse(range[0], range[1], host, function(error, port) {
+        if(error) throw(error);
+        cbk(port);
     })
 }
 
@@ -99,7 +102,6 @@ function overWrite(item, callback) {
 }
 
 var target_dir = __dirname+'/../..';
-var config_file = target_dir+'/config.json';
 
 function main() {
     inquirer.prompt([{
@@ -119,17 +121,72 @@ function main() {
         switch(answers.options) {
 
             case 'Add a server (node)':
-                get_available_port(function() {
+
+                while (isCluster !== 'true' && isCluster !== 'false'){
+                    isCluster = promptSync('?'.green+' This is a root server?* [true|false] '.bold.white);
+                }
+
+                if(isCluster === 'true') {
+                    target_dir = '.';
+                }
+
+                var _config = {};
+                config_file = target_dir+'/config.json';
+
+                if (fs.existsSync(config_file)) { 
+                    config = require(config_file);
+                    if(config['port-range']) {
+                        if(config['port-range'].split && config['port-range'].split('-')) {
+                            range_port = config['port-range'].split('-');
+                        }
+                    } else {
+                        config['port-range'] = range_port.join('-');
+                    }
+                } else {
+                    config['port-range'] = range_port.join('-');
+                }
+
+                if(!config.servers) {
+                    config.servers = {};
+                }
+
+                //Clean deleted servers
+                for(var serv in config.servers) {
+                    if (!fs.existsSync(target_dir+'/servers/'+serv)) { 
+                        delete config.servers[serv];
+                    }
+                }
+
+                var range_container = [];
+                var current_range = '';
+                var arr = Object.keys(config.servers);
+                const totalPortNum = parseInt(range_port[1] - range_port[0],10);
+                const totalServNum = arr.length+1;
+                var servNum, minNum, maxNum, rangeNum;
+                for(var i=0; i<totalServNum; i++) {
+                    servNum = i+1;
+                    rangeNum = Math.floor(totalPortNum / totalServNum);
+                    maxNum = parseInt(range_port[0],10) + rangeNum * servNum;
+                    minNum = maxNum - rangeNum;
+                    maxNum--;
+                    range_container.push(minNum+'-'+maxNum);
+                }
+
+                current_range = range_container.pop();
+                var range_item = '';
+                var tmp_s = [];
+                for (var serv in config.servers) {
+                    tmp_s.push(serv);
+                    range_container.push(range_item = range_container.shift());
+                    get_available_port(config.servers[serv].split(':')[0],range_item,function(av_port) {
+                        var _serv = tmp_s.shift();
+                        config.servers[_serv] = config.servers[_serv].split(':')[0]+':'+av_port;
+                    });
+                }
+
+                get_available_port('localhost',current_range.split('-'),function(next_port) {
 
                     var server = [
-                    {
-                        type: 'confirm',
-                        name: 'location',
-                        message: 'This is a new cluster?*',
-                        validate: function(str){
-                            return !!str;
-                        }
-                    },
                     {
                         type: 'input',
                         name: 'name',
@@ -190,8 +247,6 @@ function main() {
 
                     inquirer.prompt(server).then(function(resp) {
 
-                        if(resp.location === true) target_dir = '.';
-
                         if(!resp.host) {
                             resp.host = 'localhost:'+next_port;
                         }
@@ -205,10 +260,46 @@ function main() {
                             }
                         }
 
-                        finish_process = function() {
+                        finalize_process = function() {
+
+                            var objs = [];
+                            for(var serv in config.servers) {
+                                if(serv === resp.name) {
+                                    _config['port-range'] = current_range;
+                                    jsonfile.writeFile(target_dir+'/servers/'+resp.name+'/config.json', _config, {spaces: 2}, function(err) {
+                                        if(err) console.error(err);
+                                        exec('cd '+target_dir+'/servers/'+resp.name+' && npm install', (err, stdout, stderr) => {
+                                            if(err) console.error(err);
+                                            exec('git clone https://github.com/guillaum3f/inode-installer.git '+target_dir+'/servers/'+resp.name+'/system/admin',
+                                                    (error, stdout, stderr) => {
+                                                        if(err) console.error(err);
+                                                        console.log(colors.green('Inode '+resp.name+' has been installed!'));
+                                                    });
+                                        });
+                                    });
+
+                                } else {
+
+                                    objs.push(require(target_dir+'/servers/'+serv+'/config.json'));
+                                    var o = objs.shift();
+                                    o['port-range'] = range_container.shift();
+                                    o['port'] = o['port-range'].split('-')[0];
+                                    jsonfile.writeFile(target_dir+'/servers/'+serv+'/config.json', o, {spaces: 2}, function(err) {
+                                        if(err) console.error(err);
+                                    });
+
+                                }
+                            }
+                        }
+
+                        config.servers[resp.name] = resp.host;
+
+                        jsonfile.writeFile(config_file, config, {spaces: 2}, function(err) {
+                            if(err) console.error(err);
                             exec('git clone https://github.com/guillaum3f/inode24.git '+target_dir+'/servers/'+resp.name,
                                     (error, stdout, stderr) => {
                                         if(error) console.log(error);
+
                                         _config.name = resp.name;
                                         _config.owner = resp.owner;
                                         _config.description = resp.description;
@@ -248,45 +339,7 @@ function main() {
                                         }
 
                                     });
-                        }
-
-                        finalize_process = function() {
-                            jsonfile.writeFile(target_dir+'/servers/'+resp.name+'/config.json', _config, {spaces: 2}, function(err) {
-                                if(err) console.error(err);
-                                exec('cd '+target_dir+'/servers/'+resp.name+' && npm install', (err, stdout, stderr) => {
-                                    if(err) console.error(err);
-                                    exec('git clone https://github.com/guillaum3f/inode-installer.git '+target_dir+'/servers/'+resp.name+'/system/admin',
-                                            (error, stdout, stderr) => {
-                                                if(err) console.error(err);
-                                                console.log(colors.green('Inode '+resp.name+' has been installed!'));
-                                            });
-                                });
-                            });
-                        }
-
-                        var config = {};
-                        var _config = {};
-
-                        if (fs.existsSync(config_file)) { 
-                            config = require(config_file);
-                        } 
-
-                        if(!config.servers) {
-                            config.servers = {};
-                        }
-
-                        config.servers[resp.name] = resp.host;
-
-                        if (fs.existsSync(config_file)) { 
-                            jsonfile.writeFile(config_file, config, {spaces: 2}, function(err) {
-                                if(err) console.error(err)
-                                    finish_process();
-                            });
-                        } else {
-                            finish_process();
-                        }
-
-
+                        });
                     });
                 }); 
 
@@ -294,15 +347,16 @@ function main() {
 
             case 'Add a third-part-server':
 
+                while (isCluster !== 'true' && isCluster !== 'false'){
+                    isCluster = promptSync('?'.green+' This is a root server?* [true|false] '.bold.white);
+                }
+
+                if(isCluster === 'true') {
+                    target_dir = '.';
+                }
+
+
                 var third_part_server = [
-                {
-                    type: 'confirm',
-                    name: 'location',
-                    message: 'This is a new cluster?*',
-                    validate: function(str){
-                        return !!str;
-                    }
-                },
                 {
                     type: 'input',
                     name: 'name',
@@ -347,29 +401,13 @@ function main() {
                         }
                 ];
 
-                if(resp.location === true) target_dir = '.';
-
                 mkdirp(target_dir+'/servers/third-part-servers', function(err) { 
                     if (err) throw err;
                 });
 
                 inquirer.prompt(third_part_server).then(function(resp) {
 
-                    finish_process = function() {
-                        exec('echo "/*Name : '+
-                                resp.name+'\ndescription : '+
-                                resp.description+'\nLicence : '+
-                                resp.licence +'*/\n" > '+
-                                target_dir+'/servers/third-part-servers/'+
-                                resp.name+'.js', (error, stdout, stderr) => {
-
-                                    console.log('Execute '+resp.editor+' '+target_dir+'/servers/third-part-servers/'+resp.name+'.js'); 
-
-                                });
-
-                    }
-
-                    var config = {};
+                    config_file = target_dir+'/config.json';
 
                     if (fs.existsSync(config_file)) { 
                         config = require(config_file);
@@ -381,14 +419,19 @@ function main() {
 
                     config['third-part-servers'].push(resp.name+'.js');
 
-                    if (fs.existsSync(config_file)) { 
-                        jsonfile.writeFile(config_file, config, {spaces: 2}, function(err) {
-                            if(err) console.error(err)
-                                finish_process();
-                        })
-                    } else {
-                        finish_process();
-                    }
+                    jsonfile.writeFile(config_file, config, {spaces: 2}, function(err) {
+                        if(err) console.error(err)
+                            exec('echo "/*Name : '+
+                                    resp.name+'\ndescription : '+
+                                    resp.description+'\nLicence : '+
+                                    resp.licence +'*/\n" > '+
+                                    target_dir+'/servers/third-part-servers/'+
+                                    resp.name+'.js', (error, stdout, stderr) => {
+
+                                        console.log('Execute '+resp.editor+' '+target_dir+'/servers/third-part-servers/'+resp.name+'.js'); 
+
+                                    });
+                    })
 
                 });
 
