@@ -167,39 +167,41 @@ function main() {
         
             case 'Start the cluster':
 
+                var timer = 0;
+
                 for(var serv in config.servers) {
-                    if (fs.existsSync(target_dir+'/servers/'+serv)) { 
-                        if(fs.existsSync(target_dir+'/servers/'+serv+'/app.js')) {
+                    if(fs.existsSync(target_dir+'/servers/'+serv+'/app.js')) {
 
-                            const proc = spawn('node', [target_dir+'/servers/'+serv+'/app.js',false], {
-                                detached: true,
-                                stdio: ['ignore',process.stdout,'ignore']
-                            });
+                        timer += 700;
 
-                            if(!run[config.name]) {
-                                run[config.name] = [];
-                            }
+                        const proc = spawn('node', [target_dir+'/servers/'+serv+'/app.js',false], {
+                            detached: true,
+                            stdio: ['ignore',process.stdout,'ignore']
+                        });
 
-                            run[config.name].push(proc.pid);
-
-                        } else {
-                            console.log('Server seems broken, no app.js found'.yellow,'Abort'.red);
+                        if(!run[config.name]) {
+                            run[config.name] = [];
                         }
 
+                        run[config.name].push(proc.pid);
+
+                    } else {
+                        console.log('Server seems broken, no app.js found'.yellow,'Abort'.red);
                     }
+
                 }
 
                 jsonfile.writeFile(run_file, run, {spaces: 2}, function(err) {
                     if(err) throw(err);
                     setTimeout(function() {
+                        console.log('');
                         main();
-                    },800);
+                    },timer);
                 });
 
                 break;
 
             case 'Stop the cluster':
-
 
                 while(run[config.name].length) {
                     exec('kill '+run[config.name].shift(), (err, stdout, stderr) => {
@@ -358,6 +360,7 @@ function main() {
                                                     (error, stdout, stderr) => {
                                                         if(err) console.error(err);
                                                         console.log(colors.green('Inode '+resp.name+' has been installed!'));
+                                                        main();
                                                     });
                                         });
                                     });
