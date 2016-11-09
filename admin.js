@@ -13,6 +13,14 @@ const promptSync = require('readline-sync').question;
 const portscanner = require('portscanner');
 const spawn = require('child_process').spawn;
 
+if(process.argv[2] === 'save') {
+    var message = process.argv[3] || 'various (automated)';
+    exec('git add . && git commit -m "'+message+'" && git push -u origin master', (err, stdout, stderr) => {
+        if(err) throw(err);
+    });
+    return;
+}
+
 var config = {};
 var config_file = '';
 var range_port = [8000,10000];
@@ -70,10 +78,13 @@ if (!config.type || config.type === 'cluster') {
 } else if (config.type === 'server') { 
     isServer = true;
     isCluster = false;
+} else if (config.type === 'hybrid') { 
+    isServer = true;
+    isCluster = true;
 } else {
     isCluster = false;
     isServer = false;
-    console.log('Type '+config.type+' is not yet supported.'.yellow,'Abort'.red);
+    console.log('Type "'.yellow+config.type.yellow+'" is not supported.'.yellow,'Abort'.red);
     return;
 }
 
@@ -85,9 +96,10 @@ if(isCluster) {
         "Start a server",
         "Stop a server"
         ]);
-} else if(isServer) {
+}
+
+if(isServer) {
     choice_menu = choice_menu.concat([
-        "Add a server (node)",
         "Add a third-part-server",
         "Add a middleware",
         "Add a local route",
