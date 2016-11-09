@@ -180,18 +180,182 @@ function main() {
                     return;
                 }
 
-                var single = [
-                {
-                    type: 'list',
-                    name: 'name',
-                    message: 'server name?*',
-                    choices: Object.keys(config.servers)
-                }
-                ];
+                var history = [];
+                var selected = '';
+                var select = {};
+                var methods = {
+                    'back' : function() {
 
-                inquirer.prompt(single).then(function(resp) {
-                    console.log('ok');
-                });
+                        if(ask && history.length) {
+                            ask(history.shift());
+                        } else {
+                            main();
+                        }
+                    },
+                    'message' : function(msg, cbk) {
+
+                        if(typeof msg === 'function') {
+                            msg = msg.toString();
+                        } 
+
+                        console.log('\n');
+                        console.log(msg);
+                        console.log('\n');
+                        cbk();
+                    },
+                    'list-files-in-dir' : function(dir,cbk) {
+                        fs.readdir(dir, (err, files) => {
+                            cbk(files);
+                        })
+                    },
+                    'config' : function(name) {
+                        var config = require(target_dir+'/servers/'+name+'/config.json');
+                        methods.message(config, function() {
+                            methods.back();
+                        });
+                    },
+                    'routes' : function(name) {
+                        methods['list-files-in-dir'](target_dir+'/servers/'+name+'/routes', function(files) {
+                            var sel = [];
+                            var pattern = new RegExp('.*\.js');
+                            files.forEach(file => {
+                                if(file.match(pattern)) sel.push(file);
+                            });
+                            ask({
+                                type: 'list',
+                                message: 'Select a route',
+                                choices: sel,
+                                callback : function(choice) {
+                                    var payload = require(target_dir+'/servers/'+name+'/routes/'+choice);
+                                    methods.message(payload, function() {
+                                        methods.back();
+                                    });
+                                }
+                            });
+                        });
+                    },
+                    'middlewares' : function(name) {
+                        methods['list-files-in-dir'](target_dir+'/servers/'+name+'/middlewares', function(files) {
+                            var sel = [];
+                            var pattern = new RegExp('.*\.js');
+                            files.forEach(file => {
+                                if(file.match(pattern)) sel.push(file);
+                            });
+                            ask({
+                                type: 'list',
+                                message: 'Select a middleware',
+                                choices: sel,
+                                callback: function(choice) {
+                                    var payload = require(target_dir+'/servers/'+name+'/middlewares/'+choice);
+                                    methods.message(payload, function() {
+                                        methods.back();
+                                    });
+                                }
+                            });
+                        });
+                    }
+                };
+
+                function ask(question) {
+
+                    if(question.before) {
+                        question.before();
+                    }
+
+                    var back = "back";
+                    question.name = 'q';
+
+                    if(question.choices) {
+                        question.choices.push(
+                                back
+                        );
+                    }
+
+                    var que = question.message;
+                    if(selected) {
+                        question.message = 'Server : "'+selected+'" - '+que;
+                    }
+
+                    inquirer.prompt(question).then(function (answers) {
+
+                        question.message = que;
+                        question.choices.pop();
+                        if(answers['q'] === back) {
+                            methods['back']();
+                            return;
+                        } else {
+                            history.unshift(question);
+                        }
+
+                        if(select.single && select.single[answers['q']]) {
+                            ask(select.single[answers['q']]);
+                        } else if(config && config.servers && config.servers[answers['q']]) {
+                            selected = answers['q'];
+                            ask(select.single.menu);
+                        } else {
+                            if (selected && methods[answers['q']] && typeof methods[answers['q']] === 'function') {
+                                methods[answers['q']](selected);
+                            } else {
+                                if(question.callback) {
+                                    question.callback(answers['q']);
+                                } else {
+                                    console.log('Nothing to do');
+                                }
+                            }
+                        }
+                    });
+                }
+
+                select.list = {
+                    type: 'list',
+                    message: 'Choose a server',
+                    before : function() {
+                        selected = '';
+                    },
+                    choices: Object.keys(config.servers)
+                };
+
+                select.single = {
+                    menu : {
+                        type: 'list',
+                        message: 'Menu',
+                        choices: [
+                            'info',
+                            'update',
+                            'upgrade'
+                        ]
+                    },
+                    info : {
+                        type: 'list',
+                        message: 'View',
+                        choices: [
+                            'config',
+                            'routes',
+                            'middlewares'
+                        ]
+                    },
+                    update : {
+                        type: 'list',
+                        message: 'Update',
+                        choices: [
+                            'thing to update 1',
+                            'thing to update 2',
+                            'thing to update 3'
+                        ]
+                    },
+                    upgrade : {
+                        type: 'list',
+                        message: 'Upgrade',
+                        choices: [
+                            'thing to upgrade 1',
+                            'thing to upgrade 2',
+                            'thing to upgrade 3'
+                        ]
+                    }
+
+                };
+
+                ask(select.list);
 
                 break;
 

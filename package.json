@@ -8,6 +8,7 @@
     "portscanner": "^1.0.0",
     "readline-sync": "^1.4.5",
     "request": "^2.78.0",
+    "terminal-menu": "^2.1.1",
     "valid-url": "^1.0.9"
   }
 }
