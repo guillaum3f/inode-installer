@@ -1,4 +1,8 @@
 {
   "name": "innov24",
-  "type": "cluster"
+  "type": "cluster",
+  "port-range": "8000-10000",
+  "servers": {
+    "test": "localhost:8003"
+  }
 }

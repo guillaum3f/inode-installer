@@ -13,6 +13,7 @@ const promptSync = require('readline-sync').question;
 const portscanner = require('portscanner');
 const spawn = require('child_process').spawn;
 
+//Arguments handling
 if(process.argv[2] === 'save') {
     var message = process.argv[3] || 'various (automated)';
     exec('git add . && git commit -m "'+message+'" && git push -u origin master', (err, stdout, stderr) => {
@@ -93,8 +94,7 @@ if(isCluster) {
         "Add a server (node)",
         "Start the cluster",
         "Stop the cluster",
-        "Start a server",
-        "Stop a server"
+        "Select a server"
         ]);
 }
 
@@ -172,11 +172,29 @@ function main() {
     }]).then(function (answers) {
         switch(answers.options) {
 
-        //"Start the cluster",
-        //"Stop the cluster",
-        //"Start a server",
-        //"Stop a server"
-        
+            case 'Select a server':
+
+                if(!config.servers) {
+                    console.log('No servers available'.red);
+                    main();
+                    return;
+                }
+
+                var single = [
+                {
+                    type: 'list',
+                    name: 'name',
+                    message: 'server name?*',
+                    choices: Object.keys(config.servers)
+                }
+                ];
+
+                inquirer.prompt(single).then(function(resp) {
+                    console.log('ok');
+                });
+
+                break;
+
             case 'Start the cluster':
 
                 var timer = 0;
